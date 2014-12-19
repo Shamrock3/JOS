@@ -128,6 +128,8 @@ lpt_putc(int c)
 static unsigned addr_6845;
 static uint16_t *crt_buf;
 static uint16_t crt_pos;
+static uint16_t colors[] = { 0x0100, 0x0200, 0x0300, 0x0400, 0x0500 };
+uint16_t color = 0x0700;
 
 static void
 cga_init(void)
@@ -157,14 +159,28 @@ cga_init(void)
 	crt_pos = pos;
 }
 
-
+static void setclr(const char clr) {
+	switch(clr) {
+	case 'b' : color = colors[0];
+		break;
+	case 'g' : color = colors[1];	
+		break;
+	case 'r' : color = colors[3];
+		break;
+	case 'm' : color = colors[4];
+		break;
+	default: color = 0x0700;
+		break;
+	}
+}
 
 static void
 cga_putc(int c)
 {
+	
 	// if no attribute given, then use black on white
 	if (!(c & ~0xFF))
-		c |= 0x0700;
+		c |= color;
 
 	switch (c & 0xff) {
 	case '\b':
@@ -469,4 +485,8 @@ iscons(int fdnum)
 {
 	// used by readline
 	return 1;
+}
+
+void set_color(const char clr) {
+	setclr(clr);
 }

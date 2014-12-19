@@ -35,3 +35,20 @@ cprintf(const char *fmt, ...)
 	return cnt;
 }
 
+int
+clrprintf(const char clr, const char *fmt, ...)
+{
+	set_color(clr);
+	va_list ap;
+	int cnt;
+
+	va_start(ap, fmt);
+	cnt = vcprintf(fmt, ap);
+	va_end(ap);
+	set_color('z');
+
+	return cnt;
+}
+
+
+

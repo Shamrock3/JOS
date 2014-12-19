@@ -11,6 +11,7 @@
 void	cputchar(int c);
 int	getchar(void);
 int	iscons(int fd);
+void	set_color(const char clr);
 
 // lib/printfmt.c
 void	printfmt(void (*putch)(int, void*), void *putdat, const char *fmt, ...);
@@ -21,6 +22,7 @@ int	vsnprintf(char *str, int size, const char *fmt, va_list);
 // lib/printf.c
 int	cprintf(const char *fmt, ...);
 int	vcprintf(const char *fmt, va_list);
+int     clrprintf(const char clr, const char* fmt, ...);
 
 // lib/fprintf.c
 int	printf(const char *fmt, ...);
