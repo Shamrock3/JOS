@@ -168,7 +168,6 @@ static void setclr(const char clr) {
 	case 'r' : color = colors[3];
 		break;
 	case 'm' : color = colors[4];
-		break;
 	default: color = 0x0700;
 		break;
 	}
