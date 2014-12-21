@@ -532,6 +532,20 @@ int
 user_mem_check(struct Env *env, const void *va, size_t len, int perm)
 {
 	// LAB 3: Your code here.
+	pte_t* pte;
+	perm = perm | PTE_P;
+	uint32_t top = (uint32_t)ROUNDUP((uint32_t) va + len, PGSIZE);
+	uint32_t bottom = (uint32_t) ROUNDDOWN(va, PGSIZE);
+
+	for(; bottom < top; bottom += PGSIZE) {
+
+		if(bottom >= ULIM || (pte = pgdir_walk(env->env_pgdir, (void *)bottom, 0)) == NULL ||  (*pte & perm) != perm) {
+			// If the first page check failed, the faulting address  should be va, not ROUNDOWN(va, PGSIZE)
+			if (bottom < (uint32_t)va) user_mem_check_addr = (uint32_t)va;
+			else user_mem_check_addr = bottom;
+			return -E_FAULT;
+			}
+		}
 
 	return 0;
 }

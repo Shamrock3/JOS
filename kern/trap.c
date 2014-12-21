@@ -9,6 +9,39 @@
 #include <kern/env.h>
 #include <kern/syscall.h>
 
+void handle_default();
+
+// These handlers should have the correct
+// error code handling.
+void handle_divide();
+void handle_debug();
+void handle_nmi();
+void handle_brkpt();
+void handle_oflow();
+void handle_bound();
+void handle_illop();
+void handle_device();
+void handle_dblflt();
+void handle_tss();
+void handle_segnp();
+void handle_stack();
+void handle_gpflt();
+void handle_pgflt();
+void handle_syscall();
+void handle_irq_timer();
+void handle_irq_kbd();
+void handle_irq_serial();
+void handle_irq_spurious();
+void handle_irq_ide();
+void handle_irq_error();
+
+// These handlers may not push error codes
+//  when they should.
+void handle_fperr();
+void handle_align();
+void handle_mchk();
+void handle_simderr();
+
 static struct Taskstate ts;
 
 /* For debugging, so print_trapframe can distinguish between printing
@@ -65,7 +98,32 @@ trap_init(void)
 	extern struct Segdesc gdt[];
 
 	// LAB 3: Your code here.
+	SETGATE(idt[T_DIVIDE], 0, GD_KT, handle_divide, 0);
+	SETGATE(idt[T_DEBUG], 0, GD_KT, handle_debug, 0);
+	SETGATE(idt[T_NMI], 0, GD_KT, handle_nmi, 0);
+	SETGATE(idt[T_BRKPT], 0, GD_KT, handle_brkpt, 3);
+	SETGATE(idt[T_OFLOW], 0, GD_KT, handle_oflow, 0);
+	SETGATE(idt[T_BOUND], 0, GD_KT, handle_bound, 0);
+	SETGATE(idt[T_ILLOP], 0, GD_KT, handle_illop, 0);
+	SETGATE(idt[T_DEVICE], 0, GD_KT, handle_device, 0);
+	SETGATE(idt[T_DBLFLT], 0, GD_KT, handle_dblflt, 0);
+	SETGATE(idt[T_TSS], 0, GD_KT, handle_tss, 0);
+	SETGATE(idt[T_SEGNP], 0, GD_KT, handle_segnp, 0);
+	SETGATE(idt[T_STACK], 0, GD_KT, handle_stack, 0);
+	SETGATE(idt[T_GPFLT], 0, GD_KT, handle_gpflt, 0);
+	SETGATE(idt[T_PGFLT], 0, GD_KT, handle_pgflt, 0);
+	SETGATE(idt[T_FPERR], 0, GD_KT, handle_fperr, 0);
+	SETGATE(idt[T_ALIGN], 0, GD_KT, handle_align, 0);
+	SETGATE(idt[T_MCHK], 0, GD_KT, handle_mchk, 0);
+	SETGATE(idt[T_SIMDERR], 0, GD_KT, handle_simderr, 0);
+	SETGATE(idt[T_SYSCALL], 0, GD_KT, handle_syscall, 3);
 
+	SETGATE(idt[IRQ_OFFSET+IRQ_TIMER], 0, GD_KT, handle_irq_timer, 0);
+	SETGATE(idt[IRQ_OFFSET+IRQ_KBD], 0, GD_KT, handle_irq_kbd, 0);
+	SETGATE(idt[IRQ_OFFSET+IRQ_SERIAL], 0, GD_KT, handle_irq_serial, 0);
+	SETGATE(idt[IRQ_OFFSET+IRQ_SPURIOUS], 0, GD_KT, handle_irq_spurious, 0);
+	SETGATE(idt[IRQ_OFFSET+IRQ_IDE], 0, GD_KT, handle_irq_ide, 0);
+	SETGATE(idt[IRQ_OFFSET+IRQ_ERROR], 0, GD_KT, handle_irq_error, 0);
 	// Per-CPU setup 
 	trap_init_percpu();
 }
@@ -141,16 +199,23 @@ print_regs(struct PushRegs *regs)
 static void
 trap_dispatch(struct Trapframe *tf)
 {
-	// Handle processor exceptions.
+	// Handle processor exceptions
+	if (tf->tf_trapno == T_PGFLT) page_fault_handler(tf);
+	if (tf->tf_trapno == T_BRKPT) breakpoint_handler(tf); 
+	if (tf->tf_trapno == T_SYSCALL) {
+		tf->tf_regs.reg_eax = syscall_handler(tf);
+	}
 	// LAB 3: Your code here.
 
 	// Unexpected trap: The user process or the kernel has a bug.
-	print_trapframe(tf);
-	if (tf->tf_cs == GD_KT)
-		panic("unhandled trap in kernel");
 	else {
-		env_destroy(curenv);
-		return;
+		print_trapframe(tf);
+		if (tf->tf_cs == GD_KT)
+			panic("unhandled trap in kernel");
+		else {
+			env_destroy(curenv);
+			return;
+		}
 	}
 }
 
@@ -204,6 +269,10 @@ page_fault_handler(struct Trapframe *tf)
 	// Handle kernel-mode page faults.
 
 	// LAB 3: Your code here.
+	// Panic in Kernel Mode
+	if ((tf->tf_cs & 0x3) == 0)
+		panic("page fault in kernel mode");
+		
 
 	// We've already handled kernel-mode exceptions, so if we get here,
 	// the page fault happened in user mode.
@@ -215,3 +284,15 @@ page_fault_handler(struct Trapframe *tf)
 	env_destroy(curenv);
 }
 
+void breakpoint_handler(struct Trapframe *tf) 
+{
+	print_trapframe(tf);
+	while(1) monitor(NULL);
+	env_destroy(curenv);
+}
+
+int32_t syscall_handler(struct Trapframe *tf) 
+{
+	struct PushRegs * regs = &(tf->tf_regs);
+	return syscall(regs->reg_eax, regs->reg_edx, regs->reg_ecx, regs->reg_ebx, regs->reg_edi, regs->reg_esi);
+}
