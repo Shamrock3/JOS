@@ -161,23 +161,23 @@ trap_init_percpu(void)
 	// user space on that CPU.
 	//
 	// LAB 4: Your code here:
+	assert(thiscpu->cpu_id == cpunum());
+        if(0 == thiscpu->cpu_ts.ts_ss0)
+        {
+            thiscpu->cpu_ts.ts_esp0 = KSTACKTOP - (KSTKSIZE+KSTKGAP)*thiscpu->cpu_id;
+            thiscpu->cpu_ts.ts_ss0 = GD_KD;
+            cprintf("cpu_%d's stack is 0x%08x\n",thiscpu->cpu_id,thiscpu->cpu_ts.ts_esp0); //Debug
 
-	// Setup a TSS so that we get the right stack
-	// when we trap to the kernel.
-	ts.ts_esp0 = KSTACKTOP;
-	ts.ts_ss0 = GD_KD;
+            gdt[(GD_TSS0 >> 3) + (thiscpu->cpu_id)] = SEG16(STS_T32A
+                    , (uint32_t) (&(thiscpu->cpu_ts))
+                    , sizeof(struct Taskstate)
+                    , 0);
 
-	// Initialize the TSS slot of the gdt.
-	gdt[GD_TSS0 >> 3] = SEG16(STS_T32A, (uint32_t) (&ts),
-					sizeof(struct Taskstate) - 1, 0);
-	gdt[GD_TSS0 >> 3].sd_s = 0;
+            gdt[(GD_TSS0 >> 3) + (thiscpu->cpu_id)].sd_s = 0;
 
-	// Load the TSS selector (like other segment selectors, the
-	// bottom three bits are special; we leave them 0)
-	ltr(GD_TSS0);
-
-	// Load the IDT
-	lidt(&idt_pd);
+            ltr((((GD_TSS0 >> 3)+thiscpu->cpu_id) << 3));
+            lidt(&idt_pd);
+        }
 }
 
 void
@@ -230,34 +230,31 @@ static void
 trap_dispatch(struct Trapframe *tf)
 {
 	// Handle processor exceptions
-	if (tf->tf_trapno == T_PGFLT) page_fault_handler(tf);
-	if (tf->tf_trapno == T_BRKPT) breakpoint_handler(tf); 
-	if (tf->tf_trapno == T_SYSCALL) {
-		tf->tf_regs.reg_eax = syscall_handler(tf);
-	}
+	switch(tf->tf_trapno) {
+	
+	case T_PGFLT: page_fault_handler(tf);	return;
+	case T_BRKPT : breakpoint_handler(tf); return;
+	case T_SYSCALL:	tf->tf_regs.reg_eax = syscall_handler(tf); return;
 	// LAB 3: Your code here.
 
 	// Handle spurious interrupts
 	// The hardware sometimes raises these because of noise on the
 	// IRQ line or other reasons. We don't care.
-	if (tf->tf_trapno == IRQ_OFFSET + IRQ_SPURIOUS) {
+	case IRQ_OFFSET + IRQ_SPURIOUS: {
 		cprintf("Spurious interrupt on irq 7\n");
 		print_trapframe(tf);
 		return;
-	}
+		}
 
 	// Handle clock interrupts. Don't forget to acknowledge the
 	// interrupt using lapic_eoi() before calling the scheduler!
 	// LAB 4: Your code here.
 
 	// Unexpected trap: The user process or the kernel has a bug.
-	else {
-		print_trapframe(tf);
-		if (tf->tf_cs == GD_KT)
-			panic("unhandled trap in kernel");
-		else {
-			env_destroy(curenv);
-			return;
+	default:{	
+		 print_trapframe(tf);
+		 if (tf->tf_cs == GD_KT) panic("unhandled trap in kernel");
+		 else {	env_destroy(curenv);	return;	}
 		}
 	}
 }
@@ -288,6 +285,7 @@ trap(struct Trapframe *tf)
 		// Acquire the big kernel lock before doing any
 		// serious kernel work.
 		// LAB 4: Your code here.
+		lock_kernel();
 		assert(curenv);
 
 		// Garbage collect if current enviroment is a zombie
@@ -329,6 +327,7 @@ page_fault_handler(struct Trapframe *tf)
 
 	// Read processor's CR2 register to find the faulting address
 	fault_va = rcr2();
+	print_trapframe(tf);
 
 	// Handle kernel-mode page faults.
 

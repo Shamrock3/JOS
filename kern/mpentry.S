@@ -37,21 +37,28 @@
 .globl mpentry_start
 mpentry_start:
 	cli            
-
+#clear all registers
 	xorw    %ax, %ax
 	movw    %ax, %ds
 	movw    %ax, %es
 	movw    %ax, %ss
 
+#loads gdt address in gdtr for that cpu
 	lgdt    MPBOOTPHYS(gdtdesc)
+
+#turn on protected mode for that cpu
 	movl    %cr0, %eax
 	orl     $CR0_PE, %eax
 	movl    %eax, %cr0
+
+#sets up CS to have code segment selector
+#and jumps to start32 instruction address for that cpu
 
 	ljmpl   $(PROT_MODE_CSEG), $(MPBOOTPHYS(start32))
 
 .code32
 start32:
+#sets up DS/ES/SS to have kernel data segment selector
 	movw    $(PROT_MODE_DSEG), %ax
 	movw    %ax, %ds
 	movw    %ax, %es
@@ -60,24 +67,24 @@ start32:
 	movw    %ax, %fs
 	movw    %ax, %gs
 
-	# Set up initial page table. We cannot use kern_pgdir yet because
-	# we are still running at a low EIP.
+# Set up initial page table. We cannot use kern_pgdir yet because
+# we are still running at a low EIP.
 	movl    $(RELOC(entry_pgdir)), %eax
 	movl    %eax, %cr3
-	# Turn on paging.
+# Turn on paging.
 	movl    %cr0, %eax
 	orl     $(CR0_PE|CR0_PG|CR0_WP), %eax
 	movl    %eax, %cr0
 
-	# Switch to the per-cpu stack allocated in boot_aps()
+# Switch to the per-cpu stack allocated in boot_aps()
 	movl    mpentry_kstack, %esp
 	movl    $0x0, %ebp       # nuke frame pointer
 
-	# Call mp_main().  (Exercise for the reader: why the indirect call?)
+# Call mp_main().  (Exercise for the reader: why the indirect call?)
 	movl    $mp_main, %eax
 	call    *%eax
 
-	# If mp_main returns (it shouldn't), loop.
+# If mp_main returns (it shouldn't), loop.
 spin:
 	jmp     spin
 

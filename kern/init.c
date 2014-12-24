@@ -52,6 +52,7 @@ i386_init(void)
 
 	// Acquire the big kernel lock before waking up APs
 	// Your code here:
+	lock_kernel();
 
 	// Starting non-boot CPUs
 	boot_aps();
@@ -61,7 +62,7 @@ i386_init(void)
 	ENV_CREATE(TEST, ENV_TYPE_USER);
 #else
 	// Touch all you want.
-	ENV_CREATE(user_primes, ENV_TYPE_USER);
+	ENV_CREATE(user_dumbfork, ENV_TYPE_USER);
 #endif // TEST*
 
 	// Schedule and run the first user environment!
@@ -73,16 +74,20 @@ i386_init(void)
 // this variable.
 void *mpentry_kstack;
 
-// Start the non-boot (AP) processors.
+// Start the non-boot (AP) processors. code run by BSP
 static void
 boot_aps(void)
 {
+	// Addresses come from mp_entry.S
 	extern unsigned char mpentry_start[], mpentry_end[];
 	void *code;
 	struct CpuInfo *c;
 
 	// Write entry code to unused memory at MPENTRY_PADDR
+	// Same code is used by all CPU's hence entered only once in memory at
+	// MPENTRY_PADDR : an adress below 640KB mark
 	code = KADDR(MPENTRY_PADDR);
+	// moves AP's "bootloader code" from address mpentry_start to KADDR()
 	memmove(code, mpentry_start, mpentry_end - mpentry_start);
 
 	// Boot each AP one at a time
@@ -92,19 +97,21 @@ boot_aps(void)
 
 		// Tell mpentry.S what stack to use 
 		mpentry_kstack = percpu_kstacks[c - cpus] + KSTKSIZE;
-		// Start the CPU at mpentry_start
+		// Start the CPU at mpentry_start : each cpu reads code at PADDR(code)
+		// Just as bootcpu reads bootloader from hard disk
 		lapic_startap(c->cpu_id, PADDR(code));
 		// Wait for the CPU to finish some basic setup in mp_main()
-		while(c->cpu_status != CPU_STARTED)
-			;
+		while(c->cpu_status != CPU_STARTED)	;
 	}
 }
 
 // Setup code for APs
+// Code shared by all AP's 
+// Code run by AP's
 void
 mp_main(void)
 {
-	// We are in high EIP now, safe to switch to kern_pgdir 
+	// We are in high EIP now, safe to switch to kern_pgdir for that AP to use(shared by all AP's)
 	lcr3(PADDR(kern_pgdir));
 	cprintf("SMP: CPU %d starting\n", cpunum());
 
@@ -118,10 +125,23 @@ mp_main(void)
 	// only one CPU can enter the scheduler at a time!
 	//
 	// Your code here:
+	lock_kernel();
+	sched_yield();
 
 	// Remove this after you finish Exercise 4
-	for (;;);
+	//for (;;);	//infinite loop till end of shutdown
 }
+
+/********************************************
+Booting up Ap's
+1) copy AP startup code at PADDR(MPENTRY_PADDR) - shared code
+2) for each cpu, give it stack address to mpentry_kstack which loaded in cpu's esp
+3) call up lapic_startap for that cpu, with starting address of code
+4) Code for mpentry.S is run
+5) esp is loaded
+6) control passes mp_main() - shared code
+7) Each cpu runs code in mp_main() forever till the end of "time" - all cpu's are running code
+*********************************************/
 
 /*
  * Variable panicstr contains argument to first call to panic; used as flag
