@@ -4,7 +4,6 @@
 #include <inc/memlayout.h>
 #include <inc/trap.h>
 
-#include <kern/picirq.h>
 
 
 ###################################################################
@@ -87,7 +86,7 @@ _alltraps :
 	pushl %ds
 	pushl %es
 	pushal
-	movw $GD_KD, %ax
+	movw GT_KD, %ax
 	movw %ax , %ds
 	movw %ax, %es
 	push %esp

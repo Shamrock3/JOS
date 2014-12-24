@@ -244,7 +244,7 @@ sys_page_map(envid_t srcenvid, void *srcva,
 	if (perm & ~PTE_SYSCALL) { panic("f"); return -E_INVAL ; }
 	//	-E_INVAL if (perm & PTE_W), but srcva is read-only in srcenvid's
 	//	address space.
-	if ((perm & PTE_W) && !(*pte & PTE_W)) { panic("g"); return -E_INVAL ; }
+	if ((perm & PTE_W) && !(*pte & PTE_W)) return -E_INVAL ;
 	// insert into dst_env's pgdir.
 	return page_insert(dst_env->env_pgdir, pp, dstva, perm) ;
 }
