@@ -90,7 +90,6 @@ sys_exofork(void)
 	if ( (i = env_alloc(&e, curenv->env_id)) < 0 ) return i;
 	e->env_status = ENV_NOT_RUNNABLE;
 	e->env_tf = curenv->env_tf;
-	e->env_parent_id = curenv->env_id;
 	e->env_tf.tf_regs.reg_eax = 0;
 	
 	return e->env_id;
@@ -137,8 +136,12 @@ sys_env_set_status(envid_t envid, int status)
 static int
 sys_env_set_pgfault_upcall(envid_t envid, void *func)
 {
-	// LAB 4: Your code here.
-	panic("sys_env_set_pgfault_upcall not implemented");
+	struct Env* env;
+	int ret;
+	if( (ret = envid2env(envid,&env, 1))) return ret;
+	env->env_pgfault_upcall = func;
+	return 0;
+	//panic("sys_env_set_pgfault_upcall not implemented");
 }
 
 // Allocate a page of memory and map it at 'va' with permission
@@ -229,19 +232,19 @@ sys_page_map(envid_t srcenvid, void *srcva,
 	int ret ;
 	//	-E_BAD_ENV if srcenvid and/or dstenvid doesn't currently exist,
 	//	or the caller doesn't have permission to change one of them.
-	if ((ret = envid2env(srcenvid, &src_env, 1))) return ret ;
-	if ((ret = envid2env(dstenvid, &dst_env, 1))) return ret ;
+	if ((ret = envid2env(srcenvid, &src_env, 1))) { panic("a"); return ret ; }
+	if ((ret = envid2env(dstenvid, &dst_env, 1))) { panic("b"); return ret ; }
 	//	-E_INVAL if srcva >= UTOP or srcva is not page-aligned,
 	//	or dstva >= UTOP or dstva is not page-aligned.
-	if ((uintptr_t)srcva >= UTOP || PGOFF(srcva)) return -E_INVAL ;
-	if ((uintptr_t)dstva >= UTOP || PGOFF(dstva)) return -E_INVAL ;
+	if ((uintptr_t)srcva >= UTOP || PGOFF(srcva)) {panic("c"); return -E_INVAL ; }
+	if ((uintptr_t)dstva >= UTOP || PGOFF(dstva)) { panic("d"); return -E_INVAL ; }
 	//	-E_INVAL is srcva is not mapped in srcenvid's address space.
-	if (!(pp = page_lookup(src_env->env_pgdir, srcva, &pte))) return -E_INVAL ;
+	if (!(pp = page_lookup(src_env->env_pgdir, srcva, &pte))) { panic("e"); return -E_INVAL ; }
 	//	-E_INVAL if perm is inappropriate (see above).
-	if (perm & ~PTE_SYSCALL) return -E_INVAL ;
+	if (perm & ~PTE_SYSCALL) { panic("f"); return -E_INVAL ; }
 	//	-E_INVAL if (perm & PTE_W), but srcva is read-only in srcenvid's
 	//	address space.
-	if ((perm & PTE_W) && !(*pte & PTE_W)) return -E_INVAL ;
+	if ((perm & PTE_W) && !(*pte & PTE_W)) { panic("g"); return -E_INVAL ; }
 	// insert into dst_env's pgdir.
 	return page_insert(dst_env->env_pgdir, pp, dstva, perm) ;
 }
@@ -357,6 +360,7 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 	case SYS_page_map : return sys_page_map(a1, (void*)a2, a3, (void*)a4, a5);
 	case SYS_page_unmap : return sys_page_unmap(a1, (void*)a2);
 	case SYS_env_set_status : return sys_env_set_status(a1, a2);
+	case SYS_env_set_pgfault_upcall : return sys_env_set_pgfault_upcall(a1, (void*)a2);
 	default: return -E_NO_SYS;
 	}
 }
