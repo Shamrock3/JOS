@@ -69,12 +69,12 @@ duppage(envid_t envid, unsigned pn)
 		panic("sys_page_map: error %e\n", r);
 	}
 	//map page copy-on-write in child's address space
-	if ((r = sys_page_map(0, (void *) va, envid, (void *) va, (PTE_P | PTE_U | PTE_COW) & ~PTE_W)) < 0)
-	panic("sys_page_map: error %e\n", r);
+		if ((r = sys_page_map(0, (void *) va, envid, (void *) va, (PTE_P | PTE_U | PTE_COW) & ~PTE_W)) < 0)
+		panic("sys_page_map: error %e\n", r);
 
 	//map page copy-on-write in its own address space
-	if ((r = sys_page_map(0, (void *) va, 0, (void *) va, (PTE_P | PTE_U | PTE_COW) & ~PTE_W)) < 0)
-	panic("sys_page_map: error %e\n", r);
+		if ((r = sys_page_map(0, (void *) va, 0, (void *) va, (PTE_P | PTE_U | PTE_COW) & ~PTE_W)) < 0)
+		panic("sys_page_map: error %e\n", r);
 	// LAB 4: Your code here.
 	return 0;
 }
