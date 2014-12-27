@@ -43,7 +43,7 @@ mpentry_start:
 	movw    %ax, %es
 	movw    %ax, %ss
 
-#loads gdt address in gdtr for that cpu
+#loads gdt address in gdtr register for that cpu
 	lgdt    MPBOOTPHYS(gdtdesc)
 
 #turn on protected mode for that cpu

@@ -10,7 +10,6 @@
 #include <kern/console.h>
 #include <kern/monitor.h>
 #include <kern/kdebug.h>
-#include <kern/trap.h>
 
 #define CMDBUF_SIZE	80	// enough for one VGA text line
 
@@ -74,7 +73,7 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 		struct Eipdebuginfo info;
 		int val = debuginfo_eip(eip, &info);
 		if( val == 0 ) {
-			cprintf("\t%s:%d: ", info.eip_file, info.eip_line);
+			cprintf("\t%s:%u: ", info.eip_file, info.eip_line);
 			cprintf("%.*s+%d\n", info.eip_fn_namelen, info.eip_fn_name, eip - info.eip_fn_addr);
 		}
 		else {
@@ -140,8 +139,6 @@ monitor(struct Trapframe *tf)
 	cprintf("Welcome to the JOS kernel monitor!\n");
 	cprintf("Type 'help' for a list of commands.\n");
 
-	if (tf != NULL)
-		print_trapframe(tf);
 
 	while (1) {
 		buf = readline("K> ");

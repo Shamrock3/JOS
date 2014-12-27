@@ -150,11 +150,13 @@ debuginfo_eip(uintptr_t addr, struct Eipdebuginfo *info)
 
 		// Make sure the STABS and string table memory is valid.
 		// LAB 3: Your code here.
-		if (0 != user_mem_check (curenv, usd, sizeof (struct UserStabData), PTE_P | PTE_U))
-		{
-		    cprintf("!User Mode addressing failed at usd");
-		    return -1;
-        	}
+		if (0 !=
+            user_mem_check (curenv, usd, sizeof (struct UserStabData),
+                            PTE_P | PTE_U))
+        {
+            cprintf("!User Mode addressing failed at usd");
+            return -1;
+        }
 	}
 
 	// String table validity checks

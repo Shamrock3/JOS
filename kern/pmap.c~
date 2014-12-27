@@ -533,7 +533,7 @@ page_remove(pde_t *pgdir, void *va)
 	struct PageInfo* pg = page_lookup(pgdir, va, &pte_store);
 	if( pg == NULL ) return;
 	page_decref(pg);
-	tlb_invalidate(pgdir, va);
+	if ( pg->pp_ref == 0 ) tlb_invalidate(pgdir, va);
 	*pte_store = 0;
 }
 

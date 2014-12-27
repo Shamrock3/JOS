@@ -35,7 +35,7 @@ cprintf(const char *fmt, ...)
 	return cnt;
 }
 
-int
+static int
 clrprintf(const char clr, const char *fmt, ...)
 {
 	set_color(clr);
