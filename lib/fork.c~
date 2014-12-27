@@ -99,6 +99,7 @@ fork(void)
 		thisenv = &envs[ENVX(sys_getenvid())];	//that is child process is running
 		return 0;
 	}
+	cprintf("[%08x] forked new env [%08x]\n", thisenv->env_id, envid);
 	uint32_t pn = PGNUM(UTEXT), r;
 	for ( ; pn < PGNUM(UTOP); pn++){
 		if (!(uvpd[PDX(pn << PGSHIFT)] & PTE_P)) continue;

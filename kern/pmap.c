@@ -185,7 +185,7 @@ mem_init(void)
 	//      (ie. perm = PTE_U | PTE_P)
 	//    - pages itself -- kernel RW, user NONE
 	// Your code goes here:
-	boot_map_region(kern_pgdir, UPAGES, npages * sizeof(struct PageInfo), PADDR(pages), PTE_U);
+	boot_map_region(kern_pgdir, UPAGES, ROUNDUP(npages * sizeof(struct PageInfo), PGSIZE), PADDR(pages), PTE_U);
 	
 
 	//////////////////////////////////////////////////////////////////////
@@ -195,7 +195,7 @@ mem_init(void)
 	//    - the new image at UENVS  -- kernel R, user R
 	//    - envs itself -- kernel RW, user NONE
 	// LAB 3: Your code here.
-	boot_map_region(kern_pgdir, UENVS, NENV * sizeof(struct Env), PADDR(envs), PTE_U);
+	boot_map_region(kern_pgdir, UENVS, ROUNDUP(NENV * sizeof(struct Env), PGSIZE), PADDR(envs), PTE_U);
 
 	//////////////////////////////////////////////////////////////////////
 	// Use the physical memory that 'bootstack' refers to as the kernel
@@ -218,12 +218,11 @@ mem_init(void)
 	// we just set up the mapping anyway.
 	// Permissions: kernel RW, user NONE
 	// Your code goes here:
-
+	boot_map_region(kern_pgdir, KERNBASE, 0xffffffff - KERNBASE, 0, PTE_W); 
 	// Initialize the SMP-related parts of the memory map
 	mem_init_mp();
 
 	// Check that the initial page directory has been set up correctly.
-	boot_map_region(kern_pgdir, KERNBASE, 0xffffffff - KERNBASE, 0, PTE_W); 
 	check_kern_pgdir();
 
 	// Switch from the minimal entry page directory to the full kern_pgdir
@@ -273,7 +272,7 @@ mem_init_mp(void)
 	int i;
 	for( i = 0; i < NCPU; i++ ) {
 		uintptr_t kstacktop_i = KSTACKTOP - i * (KSTKSIZE + KSTKGAP) - KSTKSIZE;
-		boot_map_region(kern_pgdir, kstacktop_i, KSTKSIZE, (physaddr_t) PADDR(percpu_kstacks[i]), PTE_W);
+		boot_map_region(kern_pgdir, kstacktop_i, KSTKSIZE, (physaddr_t) PADDR(percpu_kstacks[i]), PTE_P|PTE_W);
 	}
 }
 
@@ -320,11 +319,10 @@ page_init(void)
 	pages[0].pp_link = NULL;
 	size_t i;
 	for (i = 1; i < npages; i++) {
-		if (i == PGNUM(MPENTRY_PADDR)) { pages[i].pp_ref = 1; continue; }
-		// [IOPHYSMEM, EXTPHYSMEM) in use
-		if (i >= PGNUM(IOPHYSMEM) && i < PGNUM(EXTPHYSMEM) )  { pages[i].pp_ref = 1; continue; }
-		// [EXTPHYSMEM, KERNEL_USE_MEMORY) in use
-		if (i >= PGNUM(EXTPHYSMEM) && i < PGNUM(PADDR(boot_alloc(0)) ) ) { pages[i].pp_ref = 1; continue; }
+		if (i == PGNUM(MPENTRY_PADDR) || 
+		   (i >= PGNUM(IOPHYSMEM) && i < PGNUM(EXTPHYSMEM) ) ||
+		   (i >= PGNUM(EXTPHYSMEM) && i < PGNUM(PADDR(boot_alloc(0)) ) ) ) 
+		{ pages[i].pp_ref = 1; pages[i].pp_link = NULL; continue; }
 		
 		// REST ADDED TO page_free_list
 		pages[i].pp_ref = 0;
@@ -377,6 +375,7 @@ page_free(struct PageInfo *pp)
 		memset(page2kva(pp), 0xcc, PGSIZE);
 	}
 }
+
 
 //
 // Decrement the reference count on a page,
@@ -446,6 +445,7 @@ boot_map_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm
 	for ( i = 0; i < size; i += PGSIZE ) {
 		pte_t* pte = pgdir_walk(pgdir, (void*) va + i, true);
 		*pte = (pa + i) | perm | PTE_P;
+		pgdir[PDX(va)] |= PTE_P | perm;
 	}	
 }
 
@@ -483,6 +483,7 @@ page_insert(pde_t *pgdir, struct PageInfo *pp, void *va, int perm)
 	pp->pp_ref++;	//needs to be present here as page_remove may free the page in next line
 	if (*pte & PTE_P) { page_remove(pgdir, va); }
 	*pte = page2pa(pp) | perm | PTE_P;
+	tlb_invalidate(pgdir, va);
 	return 0;
 }
 
@@ -532,7 +533,7 @@ page_remove(pde_t *pgdir, void *va)
 	struct PageInfo* pg = page_lookup(pgdir, va, &pte_store);
 	if( pg == NULL ) return;
 	page_decref(pg);
-	if ( pg->pp_ref == 0 ) tlb_invalidate(pgdir, va);
+	tlb_invalidate(pgdir, va);
 	*pte_store = 0;
 }
 
@@ -582,7 +583,7 @@ mmio_map_region(physaddr_t pa, size_t size)
 	//
 	// Your code here:
 	size = ROUNDUP(size, PGSIZE);
-	if( base + size < MMIOLIM ) boot_map_region(kern_pgdir, base, ROUNDUP(size, PGSIZE), pa, PTE_PCD|PTE_PWT|PTE_W);
+	if( base + size < MMIOLIM ) boot_map_region(kern_pgdir, base, size, pa, PTE_PCD|PTE_PWT|PTE_W);
 	else panic("Overflowing MMIO\n");
 	base = base + size;
 	return (void *) result;
