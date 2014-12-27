@@ -25,9 +25,9 @@ pgfault(struct UTrapframe *utf)
 	//   (see <inc/memlayout.h>).
 
 	// LAB 4: Your code here.
-	if( !(err & FEC_WR) ) panic("Not a write operation");
+	//if( !(err & FEC_WR) ) panic("Not a write operation");
 	pte_t pte = uvpt[PGNUM((uint32_t)addr)];
-	if ( !(pte & PTE_COW)) panic("page Not copy on write");
+	if ( !(pte & (PTE_W|PTE_COW))) panic("page Not copy on write");
 
 
 	// Allocate a new page, map it at a temporary location (PFTEMP),
@@ -58,24 +58,16 @@ static int
 duppage(envid_t envid, unsigned pn)
 {
 	int r;
-	unsigned va = (pn << PGSHIFT);
-	if (!(uvpt[pn] & PTE_P)) 	panic("page not present\n");
-	if (pn >= PGNUM(UTOP) || va >= UTOP)	panic("page out of UTOP\n");
-	if (!(uvpt[pn] & PTE_U))	panic("page must user accessible\n");
 
-	//map pages that are neither writable nor copy on write
-	if (!((uvpt[pn] & PTE_W) || (uvpt[pn] & PTE_COW))) {
-		if ((r = sys_page_map(0, (void *) va, envid, (void *) va, PGOFF(uvpt[pn]) )) < 0) 
-		panic("sys_page_map: error %e\n", r);
-	}
-	//map page copy-on-write in child's address space
-	if ((r = sys_page_map(0, (void *) va, envid, (void *) va, (PTE_P | PTE_U | PTE_COW) & ~PTE_W)) < 0)
-	panic("sys_page_map: error %e\n", r);
-
-	//map page copy-on-write in its own address space
-	if ((r = sys_page_map(0, (void *) va, 0, (void *) va, (PTE_P | PTE_U | PTE_COW) & ~PTE_W)) < 0)
-	panic("sys_page_map: error %e\n", r);
 	// LAB 4: Your code here.
+	int perm = PTE_P|PTE_U;
+	void *va = (void *)(pn << PGSHIFT);
+	if ((uvpt[pn] & PTE_W) || (uvpt[pn] & PTE_COW))
+		perm |= PTE_COW;
+	if ((r = sys_page_map(0, va, envid, va, perm)) < 0)
+		panic("error in duppage(), sys_page_map: %e\n", r);
+	if ((r = sys_page_map(0, va, 0, va, perm)) < 0)
+		panic("error in duppage(), sys_page_map: %e\n", r);
 	return 0;
 }
 
@@ -105,20 +97,20 @@ fork(void)
 	if((envid = sys_exofork()) < 0) panic("exofork failed");
 	if(envid == 0) { 
 		thisenv = &envs[ENVX(sys_getenvid())];	//that is child process is running
-		return envid;
+		return 0;
 	}
-	int pgn, r;
-	uint32_t UXSTACKBASE = UXSTACKTOP - PGSIZE;
-	for(pgn = PGNUM(UTEXT); pgn < PGNUM(USTACKTOP); pgn++)    {
-        	if(pgn < PGNUM(UXSTACKBASE) 
-                && ( (PTE_P | PTE_U) == (uvpd[pgn >> 10] & (PTE_P | PTE_U)))
-                && ((PTE_P | PTE_U) == (uvpt[pgn] & (PTE_P | PTE_U))) )
-        	{       duppage(envid, pgn);        }
-        }
+	uint32_t pn = PGNUM(UTEXT), r;
+	for ( ; pn < PGNUM(UTOP); pn++){
+		if (!(uvpd[PDX(pn << PGSHIFT)] & PTE_P)) continue;
+		if (!(uvpt[pn] & PTE_P)) continue;
+		if ((pn << PGSHIFT) < UXSTACKTOP - PGSIZE){
+			duppage(envid, pn);
+		}
+	}
 
 	if ((r = sys_page_alloc(envid, (void*)(UXSTACKTOP-PGSIZE), PTE_P | PTE_U | PTE_W)) < 0)
 		panic("sys_page_alloc: error %e\n", r);
-	if ((r = sys_env_set_pgfault_upcall(envid, _pgfault_upcall)) < 0)
+	if ((r = sys_env_set_pgfault_upcall(envid, thisenv->env_pgfault_upcall)) < 0)
 		panic("sys_env_set_pgfault_upcall: error %e\n", r);
 	if ((r = sys_env_set_status(envid, ENV_RUNNABLE)) < 0) 
 		panic("sys_env_set_status: error %e\n", r);

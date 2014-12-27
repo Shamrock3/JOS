@@ -37,26 +37,14 @@ sched_yield(void)
 	// case: env status is RUNNABLE
 	for (i = 0; i < NENV; i++) {
 		next_envid = (first_eid + i) % NENV;
-		if (
-		    envs[next_envid].env_status == ENV_RUNNABLE) {
-			cprintf("envrun RUNNABLE: %d\n", next_envid);
+		if (envs[next_envid].env_status == ENV_RUNNABLE) {
 			env_run(&envs[next_envid]);
 			break;
 		}
 	}	
 
-	// case: env status is RUNNING
-	for (i = 0; i < NENV; i++) {
-		next_envid = (first_eid+i) % NENV;
-		if (
-		    envs[next_envid].env_status == ENV_RUNNING &&
-		    envs[next_envid].env_cpunum == cpunum()) {
-			cprintf("envrun RUNNING: %d\n", next_envid);
-			env_run(&envs[next_envid]);
-			break;
-		}
-	}
-	
+	// case: env status is RUNNING	
+	if( curenv && curenv->env_status == RUNNING ) { env_run(curenv); return; }
 
 	// sched_halt never returns
 	sched_halt();

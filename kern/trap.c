@@ -126,7 +126,7 @@ trap_init_percpu(void)
 
 	// Load the TSS selector (like other segment selectors, the
 	// bottom three bits are special; we leave them 0)
-	ltr((((GD_TSS0 >> 3)+ cid) << 3));
+	ltr(GD_TSS0 + cid * sizeof(struct Segdesc));
 
 	// Load the IDT
 	lidt(&idt_pd);
@@ -184,9 +184,9 @@ trap_dispatch(struct Trapframe *tf)
 	// Handle processor exceptions
 	switch(tf->tf_trapno) {
 	
-	case T_PGFLT: page_fault_handler(tf);	return;
-	case T_BRKPT : breakpoint_handler(tf); return;
-	case T_SYSCALL:	tf->tf_regs.reg_eax = syscall_handler(tf); return;
+	case T_PGFLT: page_fault_handler(tf); break;
+	case T_BRKPT : breakpoint_handler(tf); break;
+	case T_SYSCALL:	tf->tf_regs.reg_eax = syscall_handler(tf); break;
 	// LAB 3: Your code here.
 
 	// Handle spurious interrupts
@@ -201,7 +201,7 @@ trap_dispatch(struct Trapframe *tf)
 	// Handle clock interrupts. Don't forget to acknowledge the
 	// interrupt using lapic_eoi() before calling the scheduler!
 	// LAB 4: Your code here.
-	case IRQ_OFFSET + IRQ_TIMER : { lapic_eoi(); sched_yield(); return; }
+	case IRQ_OFFSET + IRQ_TIMER : { lapic_eoi(); sched_yield(); break; }
 	case IRQ_OFFSET + IRQ_KBD : print_trapframe(tf);break;
 	case IRQ_OFFSET + IRQ_SERIAL : print_trapframe(tf);break;
 	case IRQ_OFFSET + IRQ_IDE : print_trapframe(tf);break;
@@ -211,6 +211,7 @@ trap_dispatch(struct Trapframe *tf)
 		 print_trapframe(tf);
 		 if (tf->tf_cs == GD_KT) panic("unhandled trap in kernel");
 		 else {	env_destroy(curenv);	return;	}
+		 break;
 		}
 	}
 }
@@ -235,7 +236,7 @@ trap(struct Trapframe *tf)
 	// fails, DO NOT be tempted to fix it by inserting a "cli" in
 	// the interrupt path.
 	assert(!(read_eflags() & FL_IF));
-
+	//lock_kernel();
 	if ((tf->tf_cs & 3) == 3) {
 		// Trapped from user mode.
 		// Acquire the big kernel lock before doing any
@@ -289,7 +290,7 @@ page_fault_handler(struct Trapframe *tf)
 
 	// LAB 3: Your code here.
 	// Panic in Kernel Mode
-	if ((tf->tf_cs & 0x3) == 0)
+	if ((tf->tf_cs & 3) == 0)
 		panic("page fault in kernel mode");
 		
 
@@ -334,7 +335,7 @@ page_fault_handler(struct Trapframe *tf)
 	struct UTrapframe *utf;
 	
 	// Figure out top where trapframe should end, leaving 1 word scratch space
-	if (tf->tf_esp >= UXSTACKTOP - PGSIZE && tf->tf_esp <= UXSTACKTOP - 1) exstack = tf->tf_esp - 4; 
+	if (tf->tf_esp >= UXSTACKTOP - PGSIZE && tf->tf_esp < UXSTACKTOP) exstack = tf->tf_esp - 4; 
 	else exstack = UXSTACKTOP;
 
 	// Check if enough space to copy trapframe
@@ -362,7 +363,6 @@ page_fault_handler(struct Trapframe *tf)
 
 void breakpoint_handler(struct Trapframe *tf) 
 {
-	print_trapframe(tf);
 	while(1) monitor(NULL);
 	env_destroy(curenv);
 }
