@@ -206,8 +206,8 @@ trap_dispatch(struct Trapframe *tf)
 	// LAB 5: Your code here.
 
 	case IRQ_OFFSET + IRQ_TIMER : { lapic_eoi(); sched_yield(); break; }
-	case IRQ_OFFSET + IRQ_KBD : print_trapframe(tf);break;
-	case IRQ_OFFSET + IRQ_SERIAL : print_trapframe(tf);break;
+	case IRQ_OFFSET + IRQ_KBD : kbd_intr();break;
+	case IRQ_OFFSET + IRQ_SERIAL : serial_intr();break;
 	case IRQ_OFFSET + IRQ_IDE : print_trapframe(tf);break;
 	case IRQ_OFFSET + IRQ_ERROR : print_trapframe(tf);break;
 
