@@ -60,14 +60,19 @@ duppage(envid_t envid, unsigned pn)
 	int r;
 
 	// LAB 4: Your code here.
-	int perm = PTE_P|PTE_U;
 	void *va = (void *)(pn << PGSHIFT);
-	if ((uvpt[pn] & PTE_W) || (uvpt[pn] & PTE_COW))
-		perm |= PTE_COW;
+	int perm = PTE_U | PTE_P;
+	if ( uvpt[pn] & PTE_SHARE ) {
+		if ((r = sys_page_map(0, va, envid, va, PGOFF(va))) < 0)
+		panic("error in duppage(), sys_page_map: %e\n", r);
+	}
+	else {
+	if ((uvpt[pn] & PTE_W) || (uvpt[pn] & PTE_COW)) perm |= PTE_COW;
 	if ((r = sys_page_map(0, va, envid, va, perm)) < 0)
 		panic("error in duppage(), sys_page_map: %e\n", r);
 	if ((r = sys_page_map(0, va, 0, va, perm)) < 0)
 		panic("error in duppage(), sys_page_map: %e\n", r);
+	}
 	return 0;
 }
 
@@ -99,7 +104,6 @@ fork(void)
 		thisenv = &envs[ENVX(sys_getenvid())];	//that is child process is running
 		return 0;
 	}
-	cprintf("[%08x] forked new env [%08x]\n", thisenv->env_id, envid);
 	uint32_t pn = PGNUM(UTEXT), r;
 	for ( ; pn < PGNUM(UTOP); pn++){
 		if (!(uvpd[PDX(pn << PGSHIFT)] & PTE_P)) continue;
