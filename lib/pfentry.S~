@@ -65,7 +65,8 @@ _pgfault_upcall:
 	// ways as registers become unavailable as scratch space.
 	//
 	// LAB 4: Your code here.
-	movl %esp, %ebx  // 40 = size between utf_fault_va ~ utf_regs
+	movl %esp, %ebx
+        // 40 = size between utf_fault_va ~ utf_regs
 	movl 40(%esp), %eax // point to utf_eip
 	movl 48(%esp), %esp // point to utf_esp
 	pushl %eax // push eip of utf

@@ -62,8 +62,20 @@ alloc_block(void)
 	// super->s_nblocks blocks in the disk altogether.
 
 	// LAB 5: Your code here.
-	panic("alloc_block not implemented");
-	return -E_NO_DISK;
+	uint32_t i, j;
+
+    for (i = 0; i < super->s_nblocks/32; i++) {
+	for (j = 0; j < 32; j++) {
+	    uint32_t match = (1 << j);
+	    if (bitmap[i] & match) {
+		bitmap[i] &= ~match;
+		flush_block(diskaddr((i * 32 | j)/BLKBITSIZE + 2));
+		return (i * 32) | j;
+	    }
+	}
+    }
+
+    return -E_NO_DISK;
 }
 
 // Validate the file system bitmap.
@@ -135,7 +147,18 @@ static int
 file_block_walk(struct File *f, uint32_t filebno, uint32_t **ppdiskbno, bool alloc)
 {
        // LAB 5: Your code here.
-       panic("file_block_walk not implemented");
+        if ( filebno >= NDIRECT + NINDIRECT) return -E_INVAL;
+	if( filebno < NDIRECT ) { *ppdiskbno = &f->f_direct[filebno]; return 0; }
+	if( !f->f_indirect) {
+		if( !alloc ) return -E_NOT_FOUND;
+		uint32_t blkno = alloc_block();
+		if(blkno < 0) return -E_NO_DISK;
+		f->f_indirect = blkno;
+		memset(diskaddr(blkno), 0, BLKSIZE);
+	}
+	*ppdiskbno = &((uintptr_t *) diskaddr(f->f_indirect))[filebno - NDIRECT];
+	return 0;
+	
 }
 
 // Set *blk to the address in memory where the filebno'th
@@ -150,7 +173,17 @@ int
 file_get_block(struct File *f, uint32_t filebno, char **blk)
 {
        // LAB 5: Your code here.
-       panic("file_get_block not implemented");
+	uint32_t *blkno;
+        int ret = file_block_walk(f, filebno, &blkno, true);
+	if ( ret < 0 ) return ret;
+	if (!*blkno) {
+		uint32_t block = alloc_block();
+		if ( block < 0 ) return -E_NO_DISK;
+		*blkno = block;
+	}
+	*blk = (char *) diskaddr(*blkno);
+	return 0;
+	
 }
 
 // Try to find a file named "name" in dir.  If so, set *file to it.
@@ -164,17 +197,21 @@ dir_lookup(struct File *dir, const char *name, struct File **file)
 	uint32_t i, j, nblock;
 	char *blk;
 	struct File *f;
-
+	/*
+	|directory|
+	|blk1 *   | ----> |inode(BLKFILES files structures)|
+	|blk2 *   | ----> |inode(BLKFILES files structures)|
+	*/
 	// Search dir for name.
 	// We maintain the invariant that the size of a directory-file
 	// is always a multiple of the file system's block size.
 	assert((dir->f_size % BLKSIZE) == 0);
 	nblock = dir->f_size / BLKSIZE;
-	for (i = 0; i < nblock; i++) {
+	for (i = 0; i < nblock; i++) {	//search in each block
 		if ((r = file_get_block(dir, i, &blk)) < 0)
 			return r;
 		f = (struct File*) blk;
-		for (j = 0; j < BLKFILES; j++)
+		for (j = 0; j < BLKFILES; j++) //search in each inode
 			if (strcmp(f[j].f_name, name) == 0) {
 				*file = &f[j];
 				return 0;
@@ -195,17 +232,17 @@ dir_alloc_file(struct File *dir, struct File **file)
 
 	assert((dir->f_size % BLKSIZE) == 0);
 	nblock = dir->f_size / BLKSIZE;
-	for (i = 0; i < nblock; i++) {
+	for (i = 0; i < nblock; i++) { //search in all blocks already present
 		if ((r = file_get_block(dir, i, &blk)) < 0)
 			return r;
 		f = (struct File*) blk;
-		for (j = 0; j < BLKFILES; j++)
+		for (j = 0; j < BLKFILES; j++)	//search empty file structure in each inode
 			if (f[j].f_name[0] == '\0') {
 				*file = &f[j];
 				return 0;
 			}
 	}
-	dir->f_size += BLKSIZE;
+	dir->f_size += BLKSIZE;	//if all blocks full, allocate block
 	if ((r = file_get_block(dir, i, &blk)) < 0)
 		return r;
 	f = (struct File*) blk;
@@ -328,9 +365,12 @@ file_read(struct File *f, void *buf, size_t count, off_t offset)
 	count = MIN(count, f->f_size - offset);
 
 	for (pos = offset; pos < offset + count; ) {
+		// read the block in which pos'th byte occurs in blk
 		if ((r = file_get_block(f, pos / BLKSIZE, &blk)) < 0)
 			return r;
+		// bn is number of bytes
 		bn = MIN(BLKSIZE - pos % BLKSIZE, offset + count - pos);
+		// move bn bytes from pos'th from blk into buf
 		memmove(buf, blk + pos % BLKSIZE, bn);
 		pos += bn;
 		buf += bn;
