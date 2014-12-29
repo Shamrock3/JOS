@@ -122,3 +122,8 @@ sys_time_msec(void)
 {
 	return (unsigned int) syscall(SYS_time_msec, 0, 0, 0, 0, 0, 0);
 }
+
+int 
+sys_net_output(const char* va, int len) {
+	return syscall(SYS_net_output, 1, (uint32_t) va, len, 0, 0, 0); 
+}
