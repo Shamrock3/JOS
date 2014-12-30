@@ -11,6 +11,8 @@
 #include <kern/syscall.h>
 #include <kern/console.h>
 #include <kern/sched.h>
+#include <kern/time.h>
+#include <kern/e1000.h>
 
 // Print a string to the system console.
 // The string is exactly 'len' characters long.
@@ -389,6 +391,26 @@ sys_ipc_recv(void *dstva)
 	return 0;
 }
 
+// Return the current time.
+static int
+sys_time_msec(void)
+{
+	// LAB 6: Your code here.
+	return time_msec();
+}
+
+static int 
+sys_net_output(const char* va, int len) {
+	if( (uint32_t) va >= UTOP ) return -E_INVAL;
+	return e1000_transmit(va, len);
+}
+
+static int
+sys_net_input(char* va, int* len) {
+	if( (uint32_t) va >= UTOP ) return -E_INVAL;
+	return e1000_receive(va, len);
+}
+
 // Dispatches to the correct kernel function, passing the arguments.
 int32_t
 syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5)
@@ -415,6 +437,9 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 	case SYS_ipc_try_send : return sys_ipc_try_send(a1, a2, (void*)a3, a4);
 	case SYS_ipc_recv : return sys_ipc_recv((void*)a1);
 	case SYS_env_set_trapframe : return sys_env_set_trapframe(a1, (struct Trapframe*) a2);
+	case SYS_time_msec : return sys_time_msec();
+	case SYS_net_output : return sys_net_output((const char*)a1, a2);
+	case SYS_net_input : return sys_net_input((char*)a1, (int*) a2);
 	default: return -E_INVAL;
 	}
 }
