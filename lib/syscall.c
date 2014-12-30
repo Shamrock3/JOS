@@ -127,3 +127,7 @@ int
 sys_net_output(const char* va, int len) {
 	return syscall(SYS_net_output, 1, (uint32_t) va, len, 0, 0, 0); 
 }
+
+int sys_net_input(char* va, int* len) {
+	return syscall(SYS_net_input, 1, (uint32_t) va, (uint32_t) len, 0, 0, 0);
+}

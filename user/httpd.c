@@ -10,6 +10,7 @@
 
 #define BUFFSIZE 512
 #define MAXPENDING 5	// Max connection requests
+#define MAX_PACKET_SIZE 1518
 
 struct http_request {
 	int sock;
@@ -77,7 +78,28 @@ static int
 send_data(struct http_request *req, int fd)
 {
 	// LAB 6: Your code here.
-	panic("send_data not implemented");
+	char buf[MAX_PACKET_SIZE];
+	int r;
+	struct Stat stat;
+
+	if ((r = fstat(fd, &stat)) < 0) {
+		die("send_data failed: fstat failed");
+	}
+
+	if (stat.st_size > MAX_PACKET_SIZE) {
+		die("send_data failed: size larger than 1518");
+	}
+
+	if ((r = readn(fd, buf, stat.st_size)) != stat.st_size) {
+		die("send_data failed: couldn't read entire data");
+	}
+
+	if ((r = write(req->sock, buf, stat.st_size)) != stat.st_size) {
+		die("send_data failed: couldn't write all data to sock");
+	}
+
+	return 0;
+	
 }
 
 static int
@@ -223,7 +245,27 @@ send_file(struct http_request *req)
 	// set file_size to the size of the file
 
 	// LAB 6: Your code here.
-	panic("send_file not implemented");
+	char path[MAXPATHLEN];                                                 
+        struct Stat stat;
+        memmove(path, req->url, strlen(req->url));  
+
+	if ((fd = open(path, O_RDONLY)) < 0) {
+		send_error(req, 404);  // HTTP page not found
+		r = fd;
+		goto end;
+	}
+
+	if ((r = fstat(fd, &stat)) < 0) {
+		goto end;
+	}
+
+	if (stat.st_isdir) {
+		send_error(req, 404); // HTTP page not found
+		r = -1;
+		goto end;
+	}
+
+	file_size = stat.st_size;
 
 	if ((r = send_header(req, 200)) < 0)
 		goto end;

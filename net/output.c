@@ -13,7 +13,7 @@ output(envid_t ns_envid)
 	//	- send the packet to the device driver
 	while(1) {
 		ret = sys_ipc_recv(&nsipcbuf);
-		if ((thisenv->env_ipc_from != ns_envid) || (thisenv->env_ipc_value != NSREQ_OUTPUT)) continue;\
+		if ((thisenv->env_ipc_from != ns_envid) || (thisenv->env_ipc_value != NSREQ_OUTPUT)) continue;
 		while((ret = sys_net_output(nsipcbuf.pkt.jp_data, nsipcbuf.pkt.jp_len)) < 0) ;
 	}
 }
