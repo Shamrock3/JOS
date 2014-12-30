@@ -15,9 +15,8 @@ int pci_network_attach(struct pci_func *pcif) {
 	pci_func_enable(pcif);
 	physaddr_t e1000_phys = pcif->reg_base[0];
 	e1000 = mmio_map_region(e1000_phys, pcif->reg_size[0]);
-	//cprintf("%08x\n", e1000[E1000_STATUS]);
 
-	//initialisation
+	//initialisation Transmission
 	memset(tx_queue, 0, sizeof(struct tx_desc) * E1000_TXDESC);
 	memset(pkt_bufs, 0, sizeof(struct packet) * E1000_TXDESC);
 	int i;
@@ -46,7 +45,7 @@ int pci_network_attach(struct pci_func *pcif) {
 	e1000[E1000_TIPG] |= (0x4) << 10; // IPGR1
 	e1000[E1000_TIPG] |= 0xA; // IPGR
 
-	//Initialise receive packets
+	//Initialise Reception
 	memset(rx_queue, 0, sizeof(struct rx_desc) * E1000_RXDESC);
 	memset(rx_pkt_bufs, 0, sizeof(struct rx_packet) * E1000_RXDESC);
 	for(i = 0; i < E1000_RXDESC; i++ ) {
@@ -54,6 +53,7 @@ int pci_network_attach(struct pci_func *pcif) {
 		rx_queue[i].status &= ~E1000_RXD_STAT_DD;
 	}
 
+	//Program the Receive addresses
 	volatile uint32_t* ral = &e1000[E1000_RA];
 	volatile uint32_t* rah = &e1000[E1000_RA + 1];
 	*rah = 0;
@@ -62,6 +62,7 @@ int pci_network_attach(struct pci_func *pcif) {
 	*ral = 0;
 	*ral |= 0x52|(0x54 << 8)|(0x00 << 16)|(0x12 << 24);
 
+	//Program the controls
 	e1000[E1000_RDBAL] = PADDR(rx_queue);
 	e1000[E1000_RDBAH] = 0;
 	e1000[E1000_RDLEN] = sizeof(struct rx_desc) * E1000_RXDESC;
@@ -73,14 +74,12 @@ int pci_network_attach(struct pci_func *pcif) {
 	e1000[E1000_RCTL] &= ~E1000_RCTL_RDMTS;
 	e1000[E1000_RCTL] &= ~E1000_RCTL_MO;
 
-	//cprintf("Address %08x:%08x\n", *ral, *rah);
-
 	return 0;
 }
 
 int e1000_transmit(const char* data, int len) {
 
-	if ( len > PKTSIZE ) return -E_PKT_LONG;
+	if ( len > TX_PKTSIZE ) return -E_PKT_LONG;
 	uint32_t tdt = e1000[E1000_TDT];
 	if ( !(tx_queue[tdt].status & E1000_TXD_STAT_DD) ) return -E_NO_FREE;
 

@@ -12,7 +12,7 @@
 // Amount of memory
 #define E1000_TXDESC 	64
 #define E1000_RXDESC	128
-#define PKTSIZE 	1518
+#define TX_PKTSIZE 	1518
 #define RX_PKTSIZE	2048
 
 // MMIO E1000 registers, divided by 4 for use as uint32_t[] indices.
@@ -58,7 +58,7 @@
 #define E1000_RCTL_SECRC          0x04000000    /* Strip Ethernet CRC */
 
 //Receive Descriptor bits
-#define E1000_RXD_STAT_DD    0x01       /* Descriptor Done */
+#define E1000_RXD_STAT_DD   	0x01       /* Descriptor Done */
 #define E1000_RXD_STAT_EOP      0x02    /* End of Packet */
 
 
@@ -87,7 +87,7 @@ struct rx_desc
 
 //wrapper for packet
 struct packet {
-	uint8_t pkt[PKTSIZE];
+	uint8_t pkt[TX_PKTSIZE];
 };
 
 struct rx_packet {
